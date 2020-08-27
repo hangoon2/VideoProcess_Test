@@ -22,7 +22,7 @@ public class TFDisplayView extends JPanel implements Runnable {
 		setLayout( new BorderLayout() );
 		setBackground(Color.black);
 		
-		imageView = new TFMirroringImageView(nHpNo, false, 720, 1280);
+		imageView = new TFMirroringImageView(nHpNo, false, 1440, 2560);
 		
 		add(imageView, BorderLayout.CENTER);
 		
