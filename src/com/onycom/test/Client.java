@@ -150,7 +150,7 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 		m_frame = frame;
 		m_guestNum = guestNum;
 		
-//		connectAgent();
+		connectAgent();
 		
 		int port = TFIniFile.getInstance().getInt("Stream", "TCPPort", 10001);
 		Client = connectToVPS("192.168.1.38", port);
@@ -159,7 +159,7 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 				bis = new BufferedInputStream(Client.getInputStream());
 				bos = new DataOutputStream(Client.getOutputStream());
 				
-				imageView.setDataOutputStream(bos);
+//				imageView.setDataOutputStream(bos);
 				
 				if(guest) {
 					setTitle("Guest Device " + nHpNo);
@@ -190,8 +190,8 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
 				// TODO Auto-generated method stub
-				capture(nHpNo);
-//				sendPowerKey();
+//				capture(nHpNo);
+				sendPowerKey();
 			}
 		});
 		
@@ -302,15 +302,15 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 	}
 	
 	public void connectAgent() {
-		String cmd = "adb shell uiautomator runtest /data/local/tmp/com.onycom.agent.jar -c com.onycom.agent.AgentMain";
-		shell(cmd);
-		
-		try {
-			Thread.sleep(1000);
-		} catch (InterruptedException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
+//		String cmd = "adb shell uiautomator runtest /data/local/tmp/com.onycom.agent.jar -c com.onycom.agent.AgentMain";
+//		shell(cmd);
+//		
+//		try {
+//			Thread.sleep(1000);
+//		} catch (InterruptedException e1) {
+//			// TODO Auto-generated catch block
+//			e1.printStackTrace();
+//		}
 				
 		agentSock = connectToAgent("127.0.0.1", 2013);
 		if(agentSock != null) {
