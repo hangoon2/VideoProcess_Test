@@ -65,6 +65,9 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 	/* device control agent */
 	private Socket agentSock = null;
 	private DataOutputStream agentOs = null;
+	private BufferedInputStream agentIs = null;
+	
+	private Thread agentResponseThread = null;
 	
 	ReceiveThread recvThread = null;
 	
@@ -153,7 +156,7 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 		connectAgent();
 		
 		int port = TFIniFile.getInstance().getInt("Stream", "TCPPort", 10001);
-		Client = connectToVPS("192.168.1.38", port);
+		Client = connectToVPS("192.168.0.4", port);
 		if(Client != null) {
 			try {
 				bis = new BufferedInputStream(Client.getInputStream());
@@ -235,18 +238,18 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 					rotate = false;
 					rotateBtn.setText("Landscape");
 					
-//					if(agentOs != null) {
-//						try {
-//							agentOs.write(data);
-//							agentOs.flush();
-//							rotate = false;
-//							
-//							rotateBtn.setText("Landscape");
-//						} catch (IOException ex) {
-//							// TODO Auto-generated catch block
-//							ex.printStackTrace();
-//						}					
-//					}
+					if(agentOs != null) {
+						try {
+							agentOs.write(data);
+							agentOs.flush();
+							rotate = false;
+							
+							rotateBtn.setText("Landscape");
+						} catch (IOException ex) {
+							// TODO Auto-generated catch block
+							ex.printStackTrace();
+						}					
+					}
 				} else {
 					// landscape
 					byte[] data = makeOnyPacket(m_nHpNo, 1004, null, 0);
@@ -255,18 +258,18 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 					rotate = true;
 					rotateBtn.setText("Portrait");
 					
-//					if(agentOs != null) {
-//						try {
-//							agentOs.write(data);
-//							agentOs.flush();
-//							rotate = true;
-//							
-//							rotateBtn.setText("Portrait");
-//						} catch (IOException ex) {
-//							// TODO Auto-generated catch block
-//							ex.printStackTrace();
-//						}					
-//					}
+					if(agentOs != null) {
+						try {
+							agentOs.write(data);
+							agentOs.flush();
+							rotate = true;
+							
+							rotateBtn.setText("Portrait");
+						} catch (IOException ex) {
+							// TODO Auto-generated catch block
+							ex.printStackTrace();
+						}					
+					}
 				}
 			}
 		});
@@ -316,8 +319,59 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 		if(agentSock != null) {
 			try {
 				agentOs = new DataOutputStream(agentSock.getOutputStream());
+				agentIs = new BufferedInputStream(agentSock.getInputStream());
+				
 				imageView.setDataOutputStream(agentOs);
 //				subImageView.setDataOutputStream(agentOs);
+				
+				if(agentIs != null) {
+					agentResponseThread = new Thread(new Runnable() {
+						
+						@Override
+						public void run() {
+							// TODO Auto-generated method stub
+							while( !Thread.currentThread().isInterrupted() ) {
+								try {
+									Thread.sleep(1);
+								} catch (InterruptedException e) {
+									// TODO Auto-generated catch block
+//									e.printStackTrace();
+								}
+								
+								try {
+									if(agentIs == null) break;
+									
+									int ret = agentIs.available();
+									if(ret < 1) continue;
+									
+									byte[] buf = new byte[ret];
+									agentIs.read(buf);
+									
+									System.out.println("Response Data : " + ret);
+								} catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+									
+							}
+						}
+					});
+					agentResponseThread.start();
+					
+					if((agentSock != null) && agentSock.isConnected()) {
+						if(agentOs != null) {
+							byte[] data = makeClosePacket(m_nHpNo, false);
+							try {
+								agentOs.write(data);
+								agentOs.flush();
+							} catch (Exception e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+							
+						}				
+					}
+				}
 			} catch(Exception e) {
 				e.printStackTrace();
 			}
@@ -553,14 +607,14 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 		
 		if((agentSock != null) && agentSock.isConnected()) {
 			if(agentOs != null) {
-				byte[] data = makeClosePacket(m_nHpNo);
+				byte[] data = makeClosePacket(m_nHpNo, true);
 				try {
 					agentOs.write(data);
 					agentOs.flush();
-					
-					this.agentSock.close();
-					Thread.sleep(100);
-					this.agentSock = null;
+//					
+//					this.agentSock.close();
+//					Thread.sleep(100);
+//					this.agentSock = null;
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
@@ -634,9 +688,19 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 	
 	private void CloseSocket() {
 		try {
+			if(agentResponseThread != null) {
+				agentResponseThread.interrupt();
+				agentResponseThread = null;
+			}
+			
 			if(agentOs != null) {
 				agentOs.close();
 				agentOs = null;
+			}
+			
+			if(agentIs != null) {
+				agentIs.close();
+				agentIs = null;
 			}
 			
 			if ((Client != null) && Client.isConnected()) {
@@ -800,7 +864,7 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 		return ret.array();
 	}
 	
-	public final byte[] makeClosePacket(int nHpNo) { 
+	public final byte[] makeClosePacket(int nHpNo, boolean close) { 
 		ByteBuffer ret = ByteBuffer.allocate(8 + 1 + 3);
 		
 		// start flag
@@ -808,7 +872,10 @@ public class Client extends JDialog implements MouseListener, MouseMotionListene
 		// data size
 		ret.putInt(0);
 		// command code
-		ret.putShort((short)2);
+		if(close)
+			ret.putShort((short)2);
+		else
+			ret.putShort((short)1);
 		// device no
 		ret.put((byte)nHpNo);
 		

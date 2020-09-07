@@ -2,11 +2,15 @@ package com.onycom.test;
 
 import java.awt.AlphaComposite;
 import java.awt.Color;
+import java.awt.Frame;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsConfiguration;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
@@ -19,11 +23,13 @@ import java.util.Date;
 
 import javax.imageio.ImageIO;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
+import com.onycom.test.finger.TFMultiTouchManager;
 import com.onycom.test.models.VideoData;
 
 @SuppressWarnings("serial")
-public class TFMirroringImageView extends JPanel implements MouseListener , MouseMotionListener{
+public class TFMirroringImageView extends JPanel implements MouseListener , MouseMotionListener, KeyListener {
 
 	BufferedImage image = null;
 	Rectangle rc = null;
@@ -50,11 +56,14 @@ public class TFMirroringImageView extends JPanel implements MouseListener , Mous
 	private int frameCount = 0;
 	private long startTime = 0;
 	
+	TFMultiTouchManager multiTouchMgr = null;
+	
 	public TFMirroringImageView(final int nHpNo, final boolean subScreen, final int deviceWidth, final int deviceHeight) {
 		// TODO Auto-generated constructor stub
 		setBackground(Color.white);		
 		addMouseListener(this);
 		addMouseMotionListener(this);
+		addKeyListener(this);
 		
 		this.nHpNo = nHpNo;
 		this.subScreen = subScreen;
@@ -189,16 +198,51 @@ public class TFMirroringImageView extends JPanel implements MouseListener , Mous
 	public void setDataOutputStream(DataOutputStream bos) {
 		this.bos = bos;
 	}
+	
+	public Rectangle recalculatedPosition() {
+		Rectangle rcRecalc = new Rectangle(0, 0, 0, 0);
+		
+		int width = getWidth();
+		int height = getHeight();
+		
+		int imgWidth = rc.width;
+		int imgHeight = rc.height;
+		
+		if(rc.width > rc.height) {
+			imgHeight = height;
+			imgWidth = (int) ((float)height / (float)rc.height * (float)rc.width); 
+		} else {
+			imgHeight = height;
+			imgWidth = (int) ((float)height / (float)rc.height * (float)rc.width);
+		}
+		
+		rcRecalc.x = startX;
+		rcRecalc.y = startY;
+		rcRecalc.width = imgWidth;
+		rcRecalc.height = imgHeight;
+		
+		return rcRecalc;
+	}
 
 	@Override
 	public void mouseClicked(MouseEvent e) {
 		// TODO Auto-generated method stub
+		if( e.isControlDown() ) {
+			if(multiTouchMgr == null) {
+				multiTouchMgr = new TFMultiTouchManager((Frame)SwingUtilities.getAncestorOfClass(Frame.class, this), this);
+			} 
+			
+			multiTouchMgr.setLCDArea( recalculatedPosition() );
+			multiTouchMgr.showFinger( e.getX(), e.getY() );
+		}
 		
 	}
 
 	@Override
 	public void mousePressed(MouseEvent e) {
 		// TODO Auto-generated method stub
+		if( isMultiTouchMode() ) return;
+		
 		if( !isLcdArea(e.getX(), e.getY()) ) return;
 		
 		int x = e.getX() - startX;
@@ -228,6 +272,8 @@ public class TFMirroringImageView extends JPanel implements MouseListener , Mous
 	@Override
 	public void mouseReleased(MouseEvent e) {
 		// TODO Auto-generated method stub
+		if( isMultiTouchMode() ) return;
+		
 		if( !isLcdArea(e.getX(), e.getY()) ) return;
 		
 		if(pressed) {
@@ -269,6 +315,8 @@ public class TFMirroringImageView extends JPanel implements MouseListener , Mous
 	@Override
 	public void mouseDragged(MouseEvent e) {
 		// TODO Auto-generated method stub
+		if( isMultiTouchMode() ) return;
+		
 		if(pressed) {
 			if( !isLcdArea(e.getX(), e.getY()) ) {
 				byte[] data = makeVPSDeviceCommand(subScreen ? 63 : 53, lastX, lastY);
@@ -310,9 +358,10 @@ public class TFMirroringImageView extends JPanel implements MouseListener , Mous
 	@Override
 	public void mouseMoved(MouseEvent e) {
 		// TODO Auto-generated method stub
+		if( isMultiTouchMode() ) return;
 	}
 	
-	private boolean isLcdArea(int x, int y) {
+	public boolean isLcdArea(int x, int y) {
 		if(imageWidth == 0 || imageHeight == 0) return false;
 		
 		if(x < startX || y < startY) return false;
@@ -323,6 +372,136 @@ public class TFMirroringImageView extends JPanel implements MouseListener , Mous
 		
 		return true;
 	}
+	
+	public Point calculateRealDeviceLcdPoint(int x, int y) {
+		Point ptCalc = new Point(0, 0);
+		Rectangle rc = recalculatedPosition();
+		
+		ptCalc.x = ((x - rc.x) * deviceWidth) / imageWidth;
+		ptCalc.y = ((y - rc.y) * deviceHeight) / imageHeight;
+		
+		return ptCalc;
+	}
+	
+	public boolean multiTouch_down(int x, int y, int x2, int y2) {
+    	sendMultiTouchDown(x, y, x2, y2);
+		
+		System.out.println("Multi Touch Down : " + x + ", " + y + ", " + x2 + ", " + y2);
+    	
+        return true;
+    }
+    
+    public boolean multiTouch_up(int x, int y, int x2, int y2) {
+    	sendMultiTouchUp(x, y, x2, y2);
+    	
+    	System.out.println("Multi Touch Up : " + x + ", " + y + ", " + x2 + ", " + y2);
+    	
+        return true;
+    }    
+    
+    public boolean multiTouch_move(int x, int y, int x2, int y2) {
+    	sendMultiTouchMove(x, y, x2, y2);
+    	
+    	System.out.println("Multi Touch Move : " + x + ", " + y + ", " + x2 + ", " + y2);
+    	
+        return true;
+    }    
+    
+    private void sendMultiTouchDown(int x, int y, int x2, int y2) {
+    	byte[] data = makeVPSDeviceCommand( 56, new Point(x, y), new Point(x2, y2) );
+		if(bos != null) {
+			try {
+				bos.write(data);
+				bos.flush();
+			} catch(Exception err) {
+				err.printStackTrace();
+			}
+		}
+    }
+    
+    private void sendMultiTouchUp(int x, int y, int x2, int y2) {
+    	byte[] data = makeVPSDeviceCommand( 57, new Point(x, y), new Point(x2, y2) );
+		if(bos != null) {
+			try {
+				bos.write(data);
+				bos.flush();
+			} catch(Exception err) {
+				err.printStackTrace();
+			}
+		}
+    }
+    
+    private void sendMultiTouchMove(int x, int y, int x2, int y2) {
+    	byte[] data = makeVPSDeviceCommand( 58, new Point(x, y), new Point(x2, y2) );
+		if(bos != null) {
+			try {
+				bos.write(data);
+				bos.flush();
+			} catch(Exception err) {
+				err.printStackTrace();
+			}
+		}
+    }
+    
+    public byte[] makeVPSDeviceCommand(int cmd, Point ptStart, Point ptEnd) {
+		short checkSum = 0;
+		
+		int headerSize = 7, dataSize = 0, destPos = 0;
+		byte startFlag = (byte) 0x7F;
+		byte endFlag = (byte) 0xEF;
+		
+		ByteBuffer  bbDataSize = ByteBuffer.wrap(new byte[4]);
+		ByteBuffer  bbCommand = ByteBuffer.wrap(new byte[2]);
+		ByteBuffer  bbCheckSum = ByteBuffer.wrap(new byte[2]);
+		ByteBuffer  bbPositon = ByteBuffer.wrap(new byte[2]);
+		byte bDeviceNo = 0;
+		byte [] baPacket = null;
+		
+		bbCommand.putShort((short)cmd);
+		bDeviceNo = (byte)nHpNo;
+		
+		if( cmd == 56 || cmd == 57 || cmd == 58 ) {
+			dataSize = 8;
+			bbDataSize.putInt(dataSize);
+			
+			baPacket = new byte[1 + headerSize + dataSize + bbCheckSum.limit() + 1];
+			
+			baPacket[0] = startFlag;
+			destPos = 1;
+			System.arraycopy(bbDataSize.array(), 0, baPacket, destPos, bbDataSize.limit());
+			destPos += bbDataSize.limit();
+			System.arraycopy(bbCommand.array(), 0, baPacket, destPos, bbCommand.limit());
+			destPos += bbCommand.limit();
+			baPacket[destPos] = bDeviceNo;
+			destPos++;
+			
+			bbPositon.putShort((short)ptStart.x);
+			System.arraycopy(bbPositon.array(), 0, baPacket, destPos, bbPositon.limit());
+			destPos += bbPositon.limit();	
+			bbPositon.clear();
+			bbPositon.putShort((short)ptStart.y);
+			System.arraycopy(bbPositon.array(), 0, baPacket, destPos, bbPositon.limit());
+			destPos += bbPositon.limit();
+			bbPositon.clear();
+			bbPositon.putShort((short)ptEnd.x);
+			System.arraycopy(bbPositon.array(), 0, baPacket, destPos, bbPositon.limit());
+			destPos += bbPositon.limit();	
+			bbPositon.clear();
+			bbPositon.putShort((short)ptEnd.y);
+			System.arraycopy(bbPositon.array(), 0, baPacket, destPos, bbPositon.limit());
+			destPos += bbPositon.limit();
+		}
+
+		if (baPacket != null) {
+			checkSum = calcChechSum(baPacket, baPacket.length);
+			bbCheckSum.putShort(checkSum);
+			System.arraycopy(bbCheckSum.array(), 0, baPacket, destPos, bbCheckSum.limit());
+		
+			baPacket[baPacket.length-1] = endFlag;
+		}
+
+		return baPacket;
+    }
 	
 	public byte[] makeVPSDeviceCommand(int cmd, int x, int y) {
 		short checkSum = 0;
@@ -408,6 +587,32 @@ public class TFMirroringImageView extends JPanel implements MouseListener , Mous
 		checksum = (short) ~sum; 
 		
 		return checksum;
+	}
+	
+	public boolean isMultiTouchMode() {
+		return multiTouchMgr != null && multiTouchMgr.isMultiTouchMode();
+	}
+
+	@Override
+	public void keyTyped(KeyEvent e) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void keyPressed(KeyEvent e) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void keyReleased(KeyEvent e) {
+		// TODO Auto-generated method stub
+		if(e.getKeyLocation() == KeyEvent.KEY_LOCATION_STANDARD) {
+			if( e.getKeyCode() == KeyEvent.VK_CONTROL && multiTouchMgr != null && multiTouchMgr.isMultiTouchMode() ) {
+				multiTouchMgr.hideFinger();
+			}
+		}
 	}
 	
 }

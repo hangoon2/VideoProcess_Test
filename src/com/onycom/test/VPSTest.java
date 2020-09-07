@@ -473,7 +473,7 @@ public class VPSTest extends JFrame {
 	public void startTest() {
 		try {
 			int port = TFIniFile.getInstance().getInt("Stream", "TCPPort", 10001);
-			vpsSock = new Socket(InetAddress.getByName("192.168.1.38"), port);
+			vpsSock = new Socket(InetAddress.getByName("192.168.0.4"), port);
 			writer = vpsSock.getOutputStream();
 			reader = new DataInputStream(vpsSock.getInputStream());
 			
